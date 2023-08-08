@@ -7,3 +7,7 @@ lazy val root = (project in file("."))
     name := "Todo",
     idePackagePrefix := Some("dog.shebang")
   )
+
+libraryDependencies ++= Seq(
+  "org.typelevel" %% "cats-effect" % "3.5.0",
+)
