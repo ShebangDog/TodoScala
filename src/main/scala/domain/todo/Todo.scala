@@ -1,10 +1,19 @@
 package dog.shebang
 package domain.todo
 
-case class Todo(id: String, title: String, description: String, createdAt: String, updatedAt: String)
+import cats.effect.std.UUIDGen
+import io.github.iltotore.iron.*
 
-object Todo {
-  def isTitleFilled(todo: Todo): Boolean = todo.title.nonEmpty
+import java.util.UUID
 
-  def isDescriptionFilled(todo: Todo): Boolean = todo.description.nonEmpty
+case class Todo(id: UUID, title: TodoRefinement.Title, description: TodoRefinement.Description, createdAt: Long, updatedAt: Long)
+
+object TodoUtil {
+  def refineTitle(title: String): Either[String, TodoRefinement.Title] =
+    title.refineEither[TodoRefinement.NonEmptyString]
+
+  def refineDescription(description: String): Either[String, TodoRefinement.Description] =
+    description.refineEither[TodoRefinement.NonEmptyString]
+
+  def generateId[F[_]](using generator: UUIDGen[F]): F[UUID] = generator.randomUUID
 }
