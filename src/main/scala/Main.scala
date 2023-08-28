@@ -51,7 +51,7 @@ object Main extends IOApp {
   }
 
   override def run(args: List[String]): IO[ExitCode] =
-    program[IO].value.map(either => (either.merge.toString, eitherToExitCode(either))).flatMap { tuple =>
-      IO.println(tuple._1).map(_ => tuple._2)
-    }
+    program[IO].value
+      .map(either => (either.merge.toString, eitherToExitCode(either)))
+      .flatMap { case (message, exitCode) => IO.println(message).map(_ => exitCode) }
 }
