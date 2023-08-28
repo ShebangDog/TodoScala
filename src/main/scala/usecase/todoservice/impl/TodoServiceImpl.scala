@@ -1,7 +1,7 @@
 package dog.shebang
 package usecase.todoservice.impl
 
-import domain.todo.Todo
+import domain.todo.{Todo, TodoRefinement}
 import repository.*
 import repository.creator.*
 import usecase.todoservice.parse.todo.{ParseDescriptionError, ParseError, ParseTitleError, parseAsTodo}
@@ -83,6 +83,68 @@ class TodoServiceTest extends AnyFunSpec {
           it(s"should return $expected") {
             assert(expected == result)
           }
+        }
+      }
+    }
+
+    describe("save") {
+      given Creator[CurriedState[MockState]] with {
+        override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, Unit] = EitherT.right(State[MockState, Unit] { mockState =>
+          (mockState, ())
+        })
+      }
+
+      describe("failure") {
+        case class FailureInput(title: String, description: String)
+
+        case class FailureTestCase(input: FailureInput, expected: Left[TodoServiceError, Todo])
+
+        val failureTestCaseList: List[FailureTestCase] = List(
+          FailureTestCase(FailureInput("", "rawDescription"), Left(TodoRepositoryError(CreateException(ParseException(ParseTitleError))))),
+          FailureTestCase(FailureInput("rawTitle", ""), Left(TodoRepositoryError(CreateException(ParseException(ParseDescriptionError))))),
+        )
+
+        failureTestCaseList.foreach { case FailureTestCase(input, expected) =>
+          describe(s"when call with $input") {
+            val FailureInput(title, description) = input
+            val (_, result) = TodoService.save[CurriedState[MockState]](title, description).value
+              .run(MockState("a5f9c478-01c0-4c0d-abcd-ee189b28fca1", 0))
+              .value
+
+            it(s"should return $expected") {
+              assert(expected == result)
+            }
+          }
+        }
+      }
+
+      describe("success") {
+        case class SuccessInput(title: TodoRefinement.Title, description: TodoRefinement.Description)
+
+        case class SuccessTestCase(input: SuccessInput, expected: Right[TodoServiceError, Todo])
+
+        val successTestCaseList: List[SuccessTestCase] = List(
+          SuccessTestCase(
+            SuccessInput("rawTitle", "rawDescription"),
+            Right(Todo(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"), "rawTitle", "rawDescription", 0, 0))
+          )
+        )
+
+        successTestCaseList.foreach { case SuccessTestCase(input, expected) =>
+          describe(s"when call with $input") {
+            val SuccessInput(title, description) = input
+            val (argument, _) = TodoService.save[CurriedState[MockState]](title, description).value
+              .run(MockState("a5f9c478-01c0-4c0d-abcd-ee189b28fca1", 0))
+              .value
+
+            val MockState(rawUuid, nowTime) = argument
+            val result = Right(Todo(UUID.fromString(rawUuid), title, description, nowTime, nowTime))
+
+            it(s"should return $expected") {
+              assert(expected == result)
+            }
+          }
+
         }
       }
     }
