@@ -56,28 +56,31 @@ class TodoServiceTest extends AnyFunSpec {
     }
 
     describe("parseAsTodo") {
-      case class Input(rawUuid: String, rawTitle: String, rawDescription: String, nowTime: Long)
-      case class TestCase(input: Input, expected: Right[Throwable, Todo])
-      val testCaseList: List[TestCase] = List(
-        TestCase(
-          Input("a5f9c478-01c0-4c0d-abcd-ee189b28fca1", "rawTitle", "rawDescription", 1627980601000L),
-          Right(
-            Todo(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"), "rawTitle", "rawDescription", 1627980601000L, 1627980601000L)
+      describe("success") {
+        case class Input(rawUuid: String, rawTitle: String, rawDescription: String, nowTime: Long)
+        case class TestCase(input: Input, expected: Right[Throwable, Todo])
+        val testCaseList: List[TestCase] = List(
+          TestCase(
+            Input("a5f9c478-01c0-4c0d-abcd-ee189b28fca1", "rawTitle", "rawDescription", 1627980601000L),
+            Right(
+              Todo(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"), "rawTitle", "rawDescription", 1627980601000L, 1627980601000L)
+            )
           )
         )
-      )
 
-      testCaseList.foreach { case TestCase(input, expected) =>
-        describe(s"when call with $input") {
-          val Input(rawUuid, rawTitle, rawDescription, nowTime) = input
-          val (_, result) = parseAsTodo[CurriedState[MockState]](rawTitle, rawDescription).value
-            .run(MockState(rawUuid, nowTime))
-            .value
+        testCaseList.foreach { case TestCase(input, expected) =>
+          describe(s"when call with $input") {
+            val Input(rawUuid, rawTitle, rawDescription, nowTime) = input
+            val (_, result) = parseAsTodo[CurriedState[MockState]](rawTitle, rawDescription).value
+              .run(MockState(rawUuid, nowTime))
+              .value
 
-          it(s"should return $expected") {
-            assert(expected == result)
+            it(s"should return $expected") {
+              assert(expected == result)
+            }
           }
         }
+
       }
     }
   }
