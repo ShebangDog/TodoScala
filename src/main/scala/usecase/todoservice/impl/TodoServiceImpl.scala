@@ -21,17 +21,27 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
+import dog.shebang.repository.reader.{Reader, ReadError}
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
     CreateException.apply.andThen(TodoRepositoryError.apply)(createError)
 
-  override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, Unit] = {
+  private def liftToTodoRepositoryError(readError: ReadError): TodoServiceError =
+    ReadException.apply.andThen(TodoRepositoryError.apply)(readError)
+
+  override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = parseAsTodo[F](rawTitle, rawDescription)
     val liftedExceptionEither = parseEither.leftMap(ParseException.apply.andThen(liftToTodoRepositoryError))
 
     liftedExceptionEither.flatMap(creator.create.andThen(_.leftMap(liftToTodoRepositoryError)))
   }
+
+  override def read[F[_] : Monad](using reader: Reader[F])(id: UUID): EitherT[F, TodoServiceError, Todo] = 
+    val todoEither = reader.read(id)
+
+    todoEither.leftMap(liftToTodoRepositoryError)
+  end read
 }
 
 class TodoServiceTest extends AnyFunSpec {
