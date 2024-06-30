@@ -22,6 +22,12 @@ import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import dog.shebang.repository.reader.{Reader, ReadError}
+import java.{util => ju}
+import hedgehog.Gen
+import dog.shebang.fake.MockState
+import org.scalatools.testing.Result
+import hedgehog.core.GenT
+import dog.shebang.fake.createFakeInmemoryRepository
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -46,22 +52,7 @@ object TodoService extends TodoService {
 
 class TodoServiceTest extends AnyFunSpec {
   describe("TodoService") {
-    case class MockState(rawUuid: String, nowTime: Long)
-    given UUIDGen[CurriedState[MockState]] with {
-      override def randomUUID: CurriedState[MockState][UUID] = State[MockState, UUID] { mockState =>
-        val MockState(uuid, _) = mockState
-
-        (mockState, UUID.fromString(uuid))
-      }
-    }
-
-    given Clock[CurriedState[MockState]] with {
-      override def realTime: CurriedState[MockState][FiniteDuration] = State[MockState, FiniteDuration] { mockState =>
-        val MockState(_, nowTime) = mockState
-
-        (mockState, FiniteDuration(nowTime, TimeUnit.MILLISECONDS))
-      }
-    }
+    import dog.shebang.fake.{FakeUUIDGen, FakeClock, MockState}
 
     describe("parseAsTodo") {
       case class TestCase[T[_, _]](input: Input, expected: T[ParseError, Todo])
@@ -161,3 +152,122 @@ class TodoServiceTest extends AnyFunSpec {
   }
 
 }
+
+import hedgehog.runner.{Test, Properties, property}
+import hedgehog.{Property, Range, Syntax, Result as HHResult}
+
+object TodoServiceProperty extends Properties:
+  override def tests: List[Test] = 
+    readTests
+  end tests
+
+  def readTests: List[Test] = 
+    List(
+      property("synmetry", ReadProperties.readSymmetry),
+      property("noCommutativity", ReadProperties.readNoCommutativity),
+      property("invariants", ReadProperties.readInvariants),
+      property("idempotence", ReadProperties.readIdempotence),
+    )
+  end readTests
+
+  object ReadProperties:
+    private def generateUUID: GenT[String] =
+      def generateUUIDSection(counts: Int): GenT[String] = 
+        Gen.string(Gen.hexit, Range.singleton(counts))
+      end generateUUIDSection
+
+      for {
+        first <- generateUUIDSection(8)
+        second <- generateUUIDSection(4)
+        third <- generateUUIDSection(4)
+        four <- generateUUIDSection(4)
+        five <- generateUUIDSection(12)
+      } yield List(first, second, third, four, five).mkString("-")
+    end generateUUID
+
+    private def generateTime: GenT[Long] =
+      Gen.long(Range.linear(Long.MinValue / 1000000, Long.MaxValue / 1000000))
+    end generateTime
+
+    import dog.shebang.fake.{FakeUUIDGen, FakeClock, createFakeInmemoryRepository}
+
+    def readSymmetry: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      val result = for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield for {
+        id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
+        todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
+      } yield (todo.title, generatedTitle)
+
+      result.map {
+        case Right(todoTitle, generatedTitle) => todoTitle ==== generatedTitle
+        case Left(value) => HHResult.failure.log("Failed to read")
+      }
+    end readSymmetry
+
+    def readNoCommutativity: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val todoBeforeSave = for {
+          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        } yield todo
+
+        val todoAfterSave = for {
+          _ <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        } yield todo
+
+        HHResult.diff(todoBeforeSave, todoAfterSave)(_ != _)
+      }
+    end readNoCommutativity
+
+    def readInvariants: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val result = for {
+          id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
+        } yield (id, todo)
+
+        result match
+          case Left(value) => HHResult.failure.log("invariants is failure")
+          case Right((id, todo)) => id ==== todo.id
+      }
+    end readInvariants
+
+    def readIdempotence: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val firstTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        val secondTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        
+        firstTime ==== secondTime
+      }
+    end readIdempotence
+    
+  end ReadProperties
+  
+end TodoServiceProperty
