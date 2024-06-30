@@ -27,6 +27,7 @@ import hedgehog.Gen
 import dog.shebang.fake.MockState
 import org.scalatools.testing.Result
 import hedgehog.core.GenT
+import dog.shebang.fake.createFakeInmemoryRepository
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -162,7 +163,8 @@ object TodoServiceProperty extends Properties:
 
   def readTests: List[Test] = 
     List(
-      property("synmetry", ReadProperties.readSymmetry)
+      property("synmetry", ReadProperties.readSymmetry),
+      property("noCommutativity", ReadProperties.readNoCommutativity)
     )
   end readTests
 
@@ -185,9 +187,11 @@ object TodoServiceProperty extends Properties:
       Gen.long(Range.linear(Long.MinValue / 1000000, Long.MaxValue / 1000000))
     end generateTime
 
-    import dog.shebang.fake.{FakeInmemoryRepository, FakeUUIDGen, FakeClock}
+    import dog.shebang.fake.{FakeUUIDGen, FakeClock, createFakeInmemoryRepository}
 
     def readSymmetry: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
       val result = for {
         generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
         generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
@@ -203,6 +207,28 @@ object TodoServiceProperty extends Properties:
         case Left(value) => HHResult.failure.log("Failed to read")
       }
     end readSymmetry
+
+    def readNoCommutativity: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val todoBeforeSave = for {
+          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        } yield todo
+
+        val todoAfterSave = for {
+          _ <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        } yield todo
+
+        HHResult.diff(todoBeforeSave, todoAfterSave)(_ != _)
+      }
+    end readNoCommutativity
     
   end ReadProperties
   
