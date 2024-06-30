@@ -61,8 +61,13 @@ object Main extends IOApp {
     case Right(_) => ExitCode.Success
   }
 
-  override def run(args: List[String]): IO[ExitCode] =
-    program[IO].value
-      .map(either => (either.merge.toString, eitherToExitCode(either)))
-      .flatMap { case (message, exitCode) => IO.println(message).map(_ => exitCode) }
+  override def run(args: List[String]): IO[ExitCode] = 
+    val io = program[IO].value
+    
+    for {
+      result <- io
+      message = result.merge.toString
+      exitCode = eitherToExitCode(result)
+      _ <- IO.println(message)
+  } yield exitCode
 }
