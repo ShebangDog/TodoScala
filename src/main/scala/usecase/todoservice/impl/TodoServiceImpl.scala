@@ -164,7 +164,8 @@ object TodoServiceProperty extends Properties:
   def readTests: List[Test] = 
     List(
       property("synmetry", ReadProperties.readSymmetry),
-      property("noCommutativity", ReadProperties.readNoCommutativity)
+      property("noCommutativity", ReadProperties.readNoCommutativity),
+      property("idempotence", ReadProperties.readIdempotence),
     )
   end readTests
 
@@ -229,6 +230,22 @@ object TodoServiceProperty extends Properties:
         HHResult.diff(todoBeforeSave, todoAfterSave)(_ != _)
       }
     end readNoCommutativity
+
+    def readIdempotence: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val firstTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        val secondTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        
+        firstTime ==== secondTime
+      }
+    end readIdempotence
     
   end ReadProperties
   
