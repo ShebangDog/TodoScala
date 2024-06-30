@@ -37,7 +37,7 @@ given FakeClock: Clock[CurriedState[MockState]] with {
   }
 }
 
-given FakeInmemoryRepository: Repository[CurriedState[MockState]] with {
+def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
   private val inMemory = mutable.Stack[Todo]()
 
   override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, UUID] = 
