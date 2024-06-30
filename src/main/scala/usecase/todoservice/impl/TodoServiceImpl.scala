@@ -99,15 +99,15 @@ class TodoServiceTest extends AnyFunSpec {
 
     describe("save") {
       given Creator[CurriedState[MockState]] with {
-        override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, Unit] = EitherT.right(State[MockState, Unit] { mockState =>
-          (mockState, ())
+        override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, UUID] = EitherT.right(State[MockState, UUID] { mockState =>
+          (mockState, UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"))
         })
       }
 
       describe("failure") {
         case class FailureInput(title: String, description: String)
 
-        case class FailureTestCase(input: FailureInput, expected: Left[TodoServiceError, Todo])
+        case class FailureTestCase(input: FailureInput, expected: Left[TodoServiceError, UUID])
 
         val failureTestCaseList: List[FailureTestCase] = List(
           FailureTestCase(FailureInput("", "rawDescription"), Left(TodoRepositoryError(CreateException(ParseException(ParseTitleError))))),
@@ -131,12 +131,12 @@ class TodoServiceTest extends AnyFunSpec {
       describe("success") {
         case class SuccessInput(title: TodoRefinement.Title, description: TodoRefinement.Description)
 
-        case class SuccessTestCase(input: SuccessInput, expected: Right[TodoServiceError, Todo])
+        case class SuccessTestCase(input: SuccessInput, expected: Right[TodoServiceError, UUID])
 
         val successTestCaseList: List[SuccessTestCase] = List(
           SuccessTestCase(
             SuccessInput("rawTitle", "rawDescription"),
-            Right(Todo(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"), "rawTitle", "rawDescription", 0, 0))
+            Right(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"))
           )
         )
 
@@ -148,7 +148,7 @@ class TodoServiceTest extends AnyFunSpec {
               .value
 
             val MockState(rawUuid, nowTime) = argument
-            val result = Right(Todo(UUID.fromString(rawUuid), title, description, nowTime, nowTime))
+            val result = Right(UUID.fromString(rawUuid))
 
             it(s"should return $expected") {
               assert(expected == result)
