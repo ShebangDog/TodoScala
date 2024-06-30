@@ -2,7 +2,6 @@ package dog.shebang
 
 import domain.todo.Todo
 import repository.creator.{CreateError, Creator}
-import repository.reader.ReadError
 import repository.{Repository, RepositoryError}
 import usecase.todoservice.TodoServiceError
 import usecase.todoservice.impl.TodoService
@@ -18,6 +17,8 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
+import dog.shebang.repository.reader.Reader
+import dog.shebang.repository.reader.ReadError
 
 object Main extends IOApp {
   given UUIDGen[IO] with {
@@ -31,19 +32,29 @@ object Main extends IOApp {
   given Repository[IO] with {
     private val inMemory = mutable.Stack[Todo]()
 
-    override def create(todo: Todo): EitherT[IO, CreateError, Unit] = EitherT.right(
+    override def create(todo: Todo): EitherT[IO, CreateError, UUID] = EitherT.right(
       IO {
         inMemory.push(todo).toList
-      }.flatMap(IO.println)
+      }
+        .flatMap(IO.println)
+        .map(_ => todo.id)
     )
+
+    override def read(id: UUID): EitherT[IO, ReadError, Todo] = 
+      val list = inMemory.toList
+      val maybeTodo = list.find(_.id == id)
+
+      EitherT.fromOption(maybeTodo, ReadError.NotFoundTodoError)
+    end read
   }
 
-  private def program[F[_] : Monad](using UUIDGen[F], Clock[F], Repository[F]): EitherT[F, TodoServiceError, Unit] = for {
+  private def program[F[_] : Monad](using UUIDGen[F], Clock[F], Repository[F]): EitherT[F, TodoServiceError, String] = for {
     _ <- TodoService.save[F]("rawTitle", "rawDescription")
-    _ <- TodoService.save[F]("title", "description")
-    _ <- TodoService.save[F]("", "")
+    id <- TodoService.save[F]("title", "description")
+    _ <- TodoService.save[F]("aaa", "aaaa")
+    todo <- TodoService.read(id)
     result <- TodoService.save[F]("rawTitle", "rawDescription")
-  } yield result
+  } yield s"uuid: $id; todo: $todo"
 
   private def eitherToExitCode[A, B](either: Either[A, B]): ExitCode = either match {
     case Left(_) => ExitCode.Error
