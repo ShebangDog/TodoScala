@@ -69,5 +69,6 @@ object Main extends IOApp {
       message = result.merge.toString
       exitCode = eitherToExitCode(result)
       _ <- IO.println(message)
-  } yield exitCode
+    } yield exitCode
+  end run
 }
