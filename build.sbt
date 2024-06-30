@@ -2,6 +2,8 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.3.0"
 
+(Test / scalaSource) := (Compile / scalaSource).value
+
 lazy val root = (project in file("."))
   .settings(
     name := "Todo",
