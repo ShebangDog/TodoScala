@@ -36,3 +36,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+.bloop/
+.metals/
+project/target/
+project/project/
+project/.bloop/
+target
