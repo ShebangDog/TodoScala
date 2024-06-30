@@ -248,7 +248,12 @@ object TodoServiceProperty extends Properties:
 
         result match
           case Left(value) => HHResult.failure.log("invariants is failure")
-          case Right((id, todo)) => id ==== todo.id
+          case Right((id, todo)) => 
+            todo.id ==== id and
+            todo.createdAt ==== timeLong and
+            todo.updatedAt ==== timeLong and
+            todo.description ==== generatedDescription and
+            todo.title ==== generatedTitle
       }
     end readInvariants
 
