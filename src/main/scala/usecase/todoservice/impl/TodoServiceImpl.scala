@@ -21,17 +21,27 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
+import dog.shebang.repository.reader.{Reader, ReadError}
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
     CreateException.apply.andThen(TodoRepositoryError.apply)(createError)
 
-  override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, Unit] = {
+  private def liftToTodoRepositoryError(readError: ReadError): TodoServiceError =
+    ReadException.apply.andThen(TodoRepositoryError.apply)(readError)
+
+  override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = parseAsTodo[F](rawTitle, rawDescription)
     val liftedExceptionEither = parseEither.leftMap(ParseException.apply.andThen(liftToTodoRepositoryError))
 
     liftedExceptionEither.flatMap(creator.create.andThen(_.leftMap(liftToTodoRepositoryError)))
   }
+
+  override def read[F[_] : Monad](using reader: Reader[F])(id: UUID): EitherT[F, TodoServiceError, Todo] = 
+    val todoEither = reader.read(id)
+
+    todoEither.leftMap(liftToTodoRepositoryError)
+  end read
 }
 
 class TodoServiceTest extends AnyFunSpec {
@@ -89,15 +99,15 @@ class TodoServiceTest extends AnyFunSpec {
 
     describe("save") {
       given Creator[CurriedState[MockState]] with {
-        override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, Unit] = EitherT.right(State[MockState, Unit] { mockState =>
-          (mockState, ())
+        override def create(todo: Todo): EitherT[CurriedState[MockState], CreateError, UUID] = EitherT.right(State[MockState, UUID] { mockState =>
+          (mockState, UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"))
         })
       }
 
       describe("failure") {
         case class FailureInput(title: String, description: String)
 
-        case class FailureTestCase(input: FailureInput, expected: Left[TodoServiceError, Todo])
+        case class FailureTestCase(input: FailureInput, expected: Left[TodoServiceError, UUID])
 
         val failureTestCaseList: List[FailureTestCase] = List(
           FailureTestCase(FailureInput("", "rawDescription"), Left(TodoRepositoryError(CreateException(ParseException(ParseTitleError))))),
@@ -121,12 +131,12 @@ class TodoServiceTest extends AnyFunSpec {
       describe("success") {
         case class SuccessInput(title: TodoRefinement.Title, description: TodoRefinement.Description)
 
-        case class SuccessTestCase(input: SuccessInput, expected: Right[TodoServiceError, Todo])
+        case class SuccessTestCase(input: SuccessInput, expected: Right[TodoServiceError, UUID])
 
         val successTestCaseList: List[SuccessTestCase] = List(
           SuccessTestCase(
             SuccessInput("rawTitle", "rawDescription"),
-            Right(Todo(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"), "rawTitle", "rawDescription", 0, 0))
+            Right(UUID.fromString("a5f9c478-01c0-4c0d-abcd-ee189b28fca1"))
           )
         )
 
@@ -138,7 +148,7 @@ class TodoServiceTest extends AnyFunSpec {
               .value
 
             val MockState(rawUuid, nowTime) = argument
-            val result = Right(Todo(UUID.fromString(rawUuid), title, description, nowTime, nowTime))
+            val result = Right(UUID.fromString(rawUuid))
 
             it(s"should return $expected") {
               assert(expected == result)
