@@ -181,13 +181,17 @@ object TodoServiceProperty extends Properties:
       } yield List(first, second, third, four, five).mkString("-")
     end generateUUID
 
+    private def generateTime: GenT[Long] =
+      Gen.long(Range.linear(Long.MinValue / 1000000, Long.MaxValue / 1000000))
+    end generateTime
+
     import dog.shebang.fake.{FakeInmemoryRepository, FakeUUIDGen, FakeClock}
 
     def readSymmetry: Property =
       val result = for {
         generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
         generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        timeLong <- Gen.long(Range.linear(Long.MinValue / 1000000, Long.MaxValue / 1000000)).forAll
+        timeLong <- generateTime.forAll
         generatedId <- generateUUID.forAll
       } yield for {
         id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
