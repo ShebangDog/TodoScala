@@ -165,6 +165,7 @@ object TodoServiceProperty extends Properties:
     List(
       property("synmetry", ReadProperties.readSymmetry),
       property("noCommutativity", ReadProperties.readNoCommutativity),
+      property("invariants", ReadProperties.readInvariants),
       property("idempotence", ReadProperties.readIdempotence),
     )
   end readTests
@@ -230,6 +231,26 @@ object TodoServiceProperty extends Properties:
         HHResult.diff(todoBeforeSave, todoAfterSave)(_ != _)
       }
     end readNoCommutativity
+
+    def readInvariants: Property =
+      given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
+
+      for {
+        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
+        timeLong <- generateTime.forAll
+        generatedId <- generateUUID.forAll
+      } yield {
+        val result = for {
+          id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
+        } yield (id, todo)
+
+        result match
+          case Left(value) => HHResult.failure.log("invariants is failure")
+          case Right((id, todo)) => id ==== todo.id
+      }
+    end readInvariants
 
     def readIdempotence: Property =
       given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
