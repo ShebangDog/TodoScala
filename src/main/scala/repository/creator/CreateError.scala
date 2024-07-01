@@ -1,8 +1,8 @@
 package dog.shebang
 package repository.creator
 
-import usecase.todoservice.parse.todo.ParseError
+import usecase.todoservice.generate.todo.GenerateError
 
 sealed trait CreateError
 
-case class ParseException(parseError: ParseError) extends CreateError
+case class ParseException(parseError: GenerateError) extends CreateError
