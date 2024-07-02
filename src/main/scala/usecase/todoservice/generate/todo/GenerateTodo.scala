@@ -30,7 +30,8 @@ object GenerateTodoProperty extends Properties:
 
   override def tests: List[Test] = 
     List(
-      property("symmetry", symmetry)
+      property("symmetry", symmetry),
+      property("noIdempotenceProperty", noIdempotenceProperty),
     )
   end tests
 
@@ -53,5 +54,21 @@ object GenerateTodoProperty extends Properties:
         todo.updatedAt ==== time
   }
   end symmetry
+
+  def noIdempotenceProperty: Property = for {
+    rawTitle <- TodoGenerator.generateRawTitle.forAll
+    rawDescription <- TodoGenerator.generateRawDescription.forAll
+    time <- TodoGenerator.generateTime.forAll
+    firstRawUUID <- UUIDGenerator.generateUUID.forAll
+    secondRawUUID <- UUIDGenerator.generateUUID.forAll
+  } yield {
+    val (_, firstTodoResult) = generateTodo(rawTitle, rawDescription).value.run(MockState(firstRawUUID, time)).value
+    val (_, secondTodoResult) = generateTodo(rawTitle, rawDescription).value.run(MockState(secondRawUUID, time)).value
+
+    (firstTodoResult, secondTodoResult) match
+      case (Right(firstTodo), Right(secondTodo)) => Result.diff(firstTodo.id, secondTodo.id)(_ != _)
+      case _ => Result.failure.log("failure")
+  }
+  end noIdempotenceProperty
 
 end GenerateTodoProperty
