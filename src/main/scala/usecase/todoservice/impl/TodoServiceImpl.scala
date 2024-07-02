@@ -28,6 +28,8 @@ import dog.shebang.fake.MockState
 import org.scalatools.testing.Result
 import hedgehog.core.GenT
 import dog.shebang.fake.createFakeInmemoryRepository
+import generator.todo.TodoGenerator
+import generator.uuid.UUIDGenerator
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -172,34 +174,16 @@ object TodoServiceProperty extends Properties:
   end readTests
 
   object ReadProperties:
-    private def generateUUID: GenT[String] =
-      def generateUUIDSection(counts: Int): GenT[String] = 
-        Gen.string(Gen.hexit, Range.singleton(counts))
-      end generateUUIDSection
-
-      for {
-        first <- generateUUIDSection(8)
-        second <- generateUUIDSection(4)
-        third <- generateUUIDSection(4)
-        four <- generateUUIDSection(4)
-        five <- generateUUIDSection(12)
-      } yield List(first, second, third, four, five).mkString("-")
-    end generateUUID
-
-    private def generateTime: GenT[Long] =
-      Gen.long(Range.linear(Long.MinValue / 1000000, Long.MaxValue / 1000000))
-    end generateTime
-
     import dog.shebang.fake.{FakeUUIDGen, FakeClock, createFakeInmemoryRepository}
 
     def readSymmetry: Property =
       given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
 
       val result = for {
-        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        timeLong <- generateTime.forAll
-        generatedId <- generateUUID.forAll
+        generatedTitle <- TodoGenerator.generateRawTitle.forAll
+        generatedDescription <- TodoGenerator.generateRawDescription.forAll
+        timeLong <- TodoGenerator.generateTime.forAll
+        generatedId <- UUIDGenerator.generateUUID.forAll
       } yield for {
         id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
         todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
@@ -215,10 +199,10 @@ object TodoServiceProperty extends Properties:
       given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
 
       for {
-        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        timeLong <- generateTime.forAll
-        generatedId <- generateUUID.forAll
+        generatedTitle <- TodoGenerator.generateRawTitle.forAll
+        generatedDescription <- TodoGenerator.generateRawDescription.forAll
+        timeLong <- TodoGenerator.generateTime.forAll
+        generatedId <- UUIDGenerator.generateUUID.forAll
       } yield {
         val todoBeforeSave = for {
           todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
@@ -237,10 +221,10 @@ object TodoServiceProperty extends Properties:
       given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
 
       for {
-        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        timeLong <- generateTime.forAll
-        generatedId <- generateUUID.forAll
+        generatedTitle <- TodoGenerator.generateRawTitle.forAll
+        generatedDescription <- TodoGenerator.generateRawDescription.forAll
+        timeLong <- TodoGenerator.generateTime.forAll
+        generatedId <- UUIDGenerator.generateUUID.forAll
       } yield {
         val result = for {
           id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
@@ -262,10 +246,10 @@ object TodoServiceProperty extends Properties:
       given Repository[CurriedState[MockState]] = createFakeInmemoryRepository
 
       for {
-        generatedTitle <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        generatedDescription <- Gen.string(Gen.alpha, Range.linear(1, 100)).forAll
-        timeLong <- generateTime.forAll
-        generatedId <- generateUUID.forAll
+        generatedTitle <- TodoGenerator.generateRawTitle.forAll
+        generatedDescription <- TodoGenerator.generateRawDescription.forAll
+        timeLong <- TodoGenerator.generateTime.forAll
+        generatedId <- UUIDGenerator.generateUUID.forAll
       } yield {
         val firstTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
         val secondTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
