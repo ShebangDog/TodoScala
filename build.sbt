@@ -4,6 +4,8 @@ ThisBuild / scalaVersion := "3.3.0"
 
 (Test / scalaSource) := (Compile / scalaSource).value
 
+reStart / mainClass := Some("dog.shebang.Main")
+
 lazy val root = (project in file("."))
   .settings(
     name := "Todo",
