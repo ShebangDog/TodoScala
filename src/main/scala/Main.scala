@@ -9,13 +9,13 @@ import utility.typeclass.clock.Clock
 import io.github.iltotore.iron.autoRefine
 
 import cats.Monad
-import cats.data.EitherT
 import cats.effect.std.UUIDGen
 import cats.effect.{ExitCode, IO, IOApp, Clock as CatsClock}
 
 import java.util.UUID
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
+import cats.data.EitherT
 
 object Main extends IOApp {
   import dog.shebang.fake.InmemoryRepository
@@ -28,31 +28,44 @@ object Main extends IOApp {
     override def realTime: IO[FiniteDuration] = CatsClock[IO].realTime
   }
 
-  private def program[F[_] : Monad](using UUIDGen[F], Clock[F], Repository[F]): EitherT[F, TodoServiceError, String] = for {
-    _ <- TodoService.save[F]("rawTitle", "rawDescription")
-    id <- TodoService.save[F]("title", "description")
-    _ <- TodoService.save[F]("aaa", "aaaa")
-    _ <- TodoService.update[F](id, "updatedTitle", "updatedDescription")
-    todo <- TodoService.read[F](id)
-    _ <- TodoService.delete[F](id)
-    todoList <- TodoService.readAll()
-    todoListFlatten = todoList.foldLeft("")((acc, todo) => acc + s"uuid: ${todo.id}; title: ${todo.title}; description: ${todo.description}\n")
-    result <- TodoService.save[F]("rawTitle", "rawDescription")
-  } yield todoListFlatten
+  private def readUserInput: IO[String] = for {
+    _ <- IO.print("コマンドを入力してください (save/read/readAll/update/delete/exit): ")
+    input <- IO.readLine
+  } yield input
+
+  private def handleUserCommand[F[_] : Monad](command: String)(using UUIDGen[F], Clock[F], Repository[F]): EitherT[F, TodoServiceError, String] = 
+    command.split(" ").toList match {
+      case "save" :: title :: description :: Nil =>
+        TodoService.save[F](title, description).map(id => s"保存されました: $id")
+      case "read" :: id :: Nil =>
+        TodoService.read(id).map(_.toString)
+      case "readAll" :: Nil =>
+        TodoService.readAll().map(_.toString)
+      case "update" :: id :: title :: description :: Nil =>
+        TodoService.update(id, title, description).map(_.toString()).map(id => s"更新されました: $id")
+      case "delete" :: id :: Nil =>
+        TodoService.delete(id).map(_.toString()).map(id => s"削除されました: $id")
+      case _ =>
+        EitherT.pure("無効なコマンドです")
+    }
+
+  private def program: IO[ExitCode] = for {
+    input <- readUserInput
+    _ <- if (input == "exit") IO.pure(ExitCode.Success)
+         else for {
+           result <- handleUserCommand[IO](input).value
+           _ <- IO.println(result.merge.toString)
+           _ <- program
+         } yield ExitCode.Error
+  } yield ExitCode.Error
+
 
   private def eitherToExitCode[A, B](either: Either[A, B]): ExitCode = either match {
     case Left(_) => ExitCode.Error
     case Right(_) => ExitCode.Success
   }
 
-  override def run(args: List[String]): IO[ExitCode] = 
-    val io = program[IO].value
-    
-    for {
-      result <- io
-      message = result.merge.toString
-      exitCode = eitherToExitCode(result)
-      _ <- IO.println(message)
-    } yield exitCode
-  end run
+  override def run(args: List[String]): IO[ExitCode] = for {
+    _ <- program
+  } yield ExitCode.Success
 }
