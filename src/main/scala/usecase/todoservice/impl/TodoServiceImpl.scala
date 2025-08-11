@@ -31,6 +31,7 @@ import dog.shebang.fake.createFakeInmemoryRepository
 import generator.todo.TodoGenerator
 import generator.uuid.UUIDGenerator
 import dog.shebang.repository.updator.{Updator, UpdateError}
+import dog.shebang.repository.deletor.{Deletor, DeleteError}
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -41,6 +42,9 @@ object TodoService extends TodoService {
 
   private def liftToTodoRepositoryError(updateError: UpdateError): TodoServiceError =
     UpdateException.apply.andThen(TodoRepositoryError.apply)(updateError)
+
+  private def liftToTodoRepositoryError(deleteError: DeleteError): TodoServiceError =
+    DeleteException.apply.andThen(TodoRepositoryError.apply)(deleteError)
 
   override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = generateTodo[F](rawTitle, rawDescription)
@@ -62,6 +66,10 @@ object TodoService extends TodoService {
   ): EitherT[F, TodoServiceError, ju.UUID] = 
     updator.update(id, title, description).leftMap(liftToTodoRepositoryError)
   end update
+
+  override def delete[F[_]: Monad](using deletor: Deletor[F])(id: UUID): EitherT[F, TodoServiceError, UUID] =
+    deletor.delete(id).leftMap(liftToTodoRepositoryError)
+  end delete
 }
 
 class TodoServiceTest extends AnyFunSpec {

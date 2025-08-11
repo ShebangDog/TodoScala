@@ -4,9 +4,11 @@ package repository
 import repository.creator.CreateError
 import repository.reader.ReadError
 import repository.updator.UpdateError
+import repository.deletor.DeleteError
 
 sealed trait RepositoryError
 
 case class CreateException(createError: CreateError) extends RepositoryError
 case class ReadException(readError: ReadError) extends RepositoryError
 case class UpdateException(updateError: UpdateError) extends RepositoryError
+case class DeleteException(deleteError: DeleteError) extends RepositoryError

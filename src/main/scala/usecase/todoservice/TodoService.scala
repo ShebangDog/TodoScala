@@ -12,6 +12,7 @@ import java.util.UUID
 import dog.shebang.domain.todo.Todo
 import dog.shebang.repository.reader.Reader
 import dog.shebang.repository.updator.Updator
+import dog.shebang.repository.deletor.Deletor
 import dog.shebang.domain.todo.TodoRefinement
 
 trait TodoService {
@@ -20,4 +21,6 @@ trait TodoService {
   def read[F[_] : Monad](using Reader[F])(id: UUID): EitherT[F, TodoServiceError, Todo]
 
   def update[F[_] : Monad](using Updator[F])(id: UUID, title: TodoRefinement.Title, description: TodoRefinement.Description): EitherT[F, TodoServiceError, UUID]
+
+  def delete[F[_] : Monad](using Deletor[F])(id: UUID): EitherT[F, TodoServiceError, UUID]
 }
