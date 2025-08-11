@@ -33,9 +33,12 @@ object Main extends IOApp {
     id <- TodoService.save[F]("title", "description")
     _ <- TodoService.save[F]("aaa", "aaaa")
     _ <- TodoService.update[F](id, "updatedTitle", "updatedDescription")
-    todo <- TodoService.read(id)
+    todo <- TodoService.read[F](id)
+    _ <- TodoService.delete[F](id)
+    todoList <- TodoService.readAll()
+    todoListFlatten = todoList.foldLeft("")((acc, todo) => acc + s"uuid: ${todo.id}; title: ${todo.title}; description: ${todo.description}\n")
     result <- TodoService.save[F]("rawTitle", "rawDescription")
-  } yield s"uuid: $id; todo: $todo"
+  } yield todoListFlatten
 
   private def eitherToExitCode[A, B](either: Either[A, B]): ExitCode = either match {
     case Left(_) => ExitCode.Error

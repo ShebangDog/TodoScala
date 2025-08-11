@@ -83,7 +83,7 @@ def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
     val maybeTodo = list.find(_.id == id)
 
     maybeTodo match {
-      case None => EitherT.leftT(DeleteError.NotFound)
+      case None => EitherT.leftT(DeleteError.NotFoundTodoError)
       case Some(todo) =>
         // Stackから該当のTodoを削除
         inMemory.filterInPlace(_.id != id)
@@ -136,7 +136,7 @@ given InmemoryRepository: Repository[IO] with {
     val maybeTodo = list.find(_.id == id)
 
     maybeTodo match {
-      case None => EitherT.leftT(DeleteError.NotFound)
+      case None => EitherT.leftT(DeleteError.NotFoundTodoError)
       case Some(todo) =>
         inMemory.filterInPlace(_.id != id)
         EitherT.rightT(todo.id)
