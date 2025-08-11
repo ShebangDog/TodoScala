@@ -37,6 +37,7 @@ build/
 ### Mac OS ###
 .DS_Store
 
+.bsp/
 .bloop/
 .metals/
 project/target/
