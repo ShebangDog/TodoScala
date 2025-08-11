@@ -6,6 +6,7 @@ import repository.{Repository, RepositoryError}
 import usecase.todoservice.TodoServiceError
 import usecase.todoservice.impl.TodoService
 import utility.typeclass.clock.Clock
+import io.github.iltotore.iron.autoRefine
 
 import cats.Monad
 import cats.data.EitherT
@@ -31,6 +32,7 @@ object Main extends IOApp {
     _ <- TodoService.save[F]("rawTitle", "rawDescription")
     id <- TodoService.save[F]("title", "description")
     _ <- TodoService.save[F]("aaa", "aaaa")
+    _ <- TodoService.update[F](id, "updatedTitle", "updatedDescription")
     todo <- TodoService.read(id)
     result <- TodoService.save[F]("rawTitle", "rawDescription")
   } yield s"uuid: $id; todo: $todo"

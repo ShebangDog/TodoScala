@@ -30,6 +30,7 @@ import hedgehog.core.GenT
 import dog.shebang.fake.createFakeInmemoryRepository
 import generator.todo.TodoGenerator
 import generator.uuid.UUIDGenerator
+import dog.shebang.repository.updator.{Updator, UpdateError}
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -37,6 +38,9 @@ object TodoService extends TodoService {
 
   private def liftToTodoRepositoryError(readError: ReadError): TodoServiceError =
     ReadException.apply.andThen(TodoRepositoryError.apply)(readError)
+
+  private def liftToTodoRepositoryError(updateError: UpdateError): TodoServiceError =
+    UpdateException.apply.andThen(TodoRepositoryError.apply)(updateError)
 
   override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = generateTodo[F](rawTitle, rawDescription)
@@ -50,6 +54,14 @@ object TodoService extends TodoService {
 
     todoEither.leftMap(liftToTodoRepositoryError)
   end read
+
+  override def update[F[_]: Monad](using updator: Updator[F])(
+    id: UUID,
+    title: TodoRefinement.Title,
+    description: TodoRefinement.Description
+  ): EitherT[F, TodoServiceError, ju.UUID] = 
+    updator.update(id, title, description).leftMap(liftToTodoRepositoryError)
+  end update
 }
 
 class TodoServiceTest extends AnyFunSpec {

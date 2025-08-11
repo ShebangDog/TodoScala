@@ -8,16 +8,18 @@ import cats.data.State
 import dog.shebang.utility.typeclass.clock.Clock
 import scala.concurrent.duration.FiniteDuration
 import java.util.concurrent.TimeUnit
-import dog.shebang.repository.reader.Reader
+import dog.shebang.repository.reader.{Reader, ReadError}
 import cats.data.EitherT
-import dog.shebang.repository.reader.ReadError
 import dog.shebang.domain.todo.Todo
 import java.{util => ju}
-import dog.shebang.repository.creator.Creator
-import dog.shebang.repository.creator.CreateError
+import dog.shebang.repository.creator.{Creator, CreateError}
+import dog.shebang.repository.updator.{Updator, UpdateError}
 import dog.shebang.repository.Repository
 import cats.effect.IO
 import scala.collection.mutable
+import dog.shebang.domain.todo.TodoRefinement.Description
+import dog.shebang.domain.todo.TodoRefinement.Title
+import dog.shebang.domain.todo.TodoRefinement
 
 case class MockState(rawUuid: String, nowTime: Long)
 
@@ -54,6 +56,20 @@ def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
 
     EitherT.fromOption(maybeTodo, ReadError.NotFoundTodoError)
   end read
+
+  override def update(id: UUID, title: TodoRefinement.Title, description: TodoRefinement.Description): EitherT[CurriedState[MockState], UpdateError, UUID] =
+    val inMemoryList = inMemory.toList
+    val todoIndex = inMemoryList.indexWhere(_.id == id)
+    val maybeTodo = inMemoryList.lift(todoIndex)
+
+    maybeTodo match {
+      case None => EitherT.leftT(UpdateError.NotFoundTodoError)
+      case Some(todo) =>
+        inMemory.update(todoIndex, todo.copy(title = title, description = description))
+
+        EitherT.right(State(initial => (initial, todo.id)))
+    }
+  end update
 }
 
 given InmemoryRepository: Repository[IO] with {
@@ -74,4 +90,18 @@ given InmemoryRepository: Repository[IO] with {
 
     EitherT.fromOption(maybeTodo, ReadError.NotFoundTodoError)
   end read
+
+  override def update(id: UUID, title: Title, description: Description): EitherT[IO, UpdateError, UUID] = 
+    val inMemoryList = inMemory.toList
+    val todoIndex = inMemoryList.indexWhere(_.id == id)
+    val maybeTodo = inMemoryList.lift(todoIndex)
+
+    maybeTodo match {
+      case None => EitherT.leftT(UpdateError.NotFoundTodoError)
+      case Some(todo) =>
+        inMemory.update(todoIndex, todo.copy(title = title, description = description))
+
+        EitherT.rightT(todo.id)
+    }
+  end update
 }
