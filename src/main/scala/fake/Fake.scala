@@ -14,6 +14,7 @@ import dog.shebang.domain.todo.Todo
 import java.{util => ju}
 import dog.shebang.repository.creator.{Creator, CreateError}
 import dog.shebang.repository.updator.{Updator, UpdateError}
+import dog.shebang.repository.deletor.{Deletor, DeleteError}
 import dog.shebang.repository.Repository
 import cats.effect.IO
 import scala.collection.mutable
@@ -57,6 +58,12 @@ def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
     EitherT.fromOption(maybeTodo, ReadError.NotFoundTodoError)
   end read
 
+  override def readAll(): EitherT[CurriedState[MockState], ReadError, List[Todo]] = 
+    val list = inMemory.toList
+
+    EitherT.right(State(initial => (initial, list)))
+  end readAll
+
   override def update(id: UUID, title: TodoRefinement.Title, description: TodoRefinement.Description): EitherT[CurriedState[MockState], UpdateError, UUID] =
     val inMemoryList = inMemory.toList
     val todoIndex = inMemoryList.indexWhere(_.id == id)
@@ -70,6 +77,19 @@ def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
         EitherT.right(State(initial => (initial, todo.id)))
     }
   end update
+
+  override def delete(id: UUID): EitherT[CurriedState[MockState], DeleteError, UUID] =
+    val list = inMemory.toList
+    val maybeTodo = list.find(_.id == id)
+
+    maybeTodo match {
+      case None => EitherT.leftT(DeleteError.NotFound)
+      case Some(todo) =>
+        // Stackから該当のTodoを削除
+        inMemory.filterInPlace(_.id != id)
+        EitherT.right(State(initial => (initial, todo.id)))
+    }
+  end delete
 }
 
 given InmemoryRepository: Repository[IO] with {
@@ -91,6 +111,12 @@ given InmemoryRepository: Repository[IO] with {
     EitherT.fromOption(maybeTodo, ReadError.NotFoundTodoError)
   end read
 
+  override def readAll(): EitherT[IO, ReadError, List[Todo]] = 
+    val list = inMemory.toList
+
+    EitherT.rightT(list)
+  end readAll
+
   override def update(id: UUID, title: Title, description: Description): EitherT[IO, UpdateError, UUID] = 
     val inMemoryList = inMemory.toList
     val todoIndex = inMemoryList.indexWhere(_.id == id)
@@ -104,4 +130,16 @@ given InmemoryRepository: Repository[IO] with {
         EitherT.rightT(todo.id)
     }
   end update
+
+  override def delete(id: UUID): EitherT[IO, DeleteError, UUID] = 
+    val list = inMemory.toList
+    val maybeTodo = list.find(_.id == id)
+
+    maybeTodo match {
+      case None => EitherT.leftT(DeleteError.NotFound)
+      case Some(todo) =>
+        inMemory.filterInPlace(_.id != id)
+        EitherT.rightT(todo.id)
+    }
+  end delete
 }

@@ -59,6 +59,12 @@ object TodoService extends TodoService {
     todoEither.leftMap(liftToTodoRepositoryError)
   end read
 
+  override def readAll[F[_] : Monad](using reader: Reader[F])(): EitherT[F, TodoServiceError, List[Todo]] = 
+    val todosEither = reader.readAll()
+
+    todosEither.leftMap(liftToTodoRepositoryError)
+  end readAll
+
   override def update[F[_]: Monad](using updator: Updator[F])(
     id: UUID,
     title: TodoRefinement.Title,

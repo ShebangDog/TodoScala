@@ -20,6 +20,8 @@ trait TodoService {
 
   def read[F[_] : Monad](using Reader[F])(id: UUID): EitherT[F, TodoServiceError, Todo]
 
+  def readAll[F[_] : Monad](using Reader[F])(): EitherT[F, TodoServiceError, List[Todo]]
+
   def update[F[_] : Monad](using Updator[F])(id: UUID, title: TodoRefinement.Title, description: TodoRefinement.Description): EitherT[F, TodoServiceError, UUID]
 
   def delete[F[_] : Monad](using Deletor[F])(id: UUID): EitherT[F, TodoServiceError, UUID]
