@@ -45,8 +45,11 @@ object TodoService extends TodoService {
   private def liftToTodoRepositoryError(updateError: UpdateError): TodoServiceError =
     UpdateException.apply.andThen(TodoRepositoryError.apply)(updateError)
 
-  private def liftToTodoRepositoryError(deleteError: DeleteError): TodoServiceError =
+  private def liftToTodoRepositoryError(deleteError: DeleteError): TodoServiceError = {
     DeleteException.apply.andThen(TodoRepositoryError.apply)(deleteError)
+  }
+
+  private def parseUUID(id: String): Either[Throwable, UUID] = Try(UUID.fromString(id)).toEither
 
   override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = generateTodo[F](rawTitle, rawDescription)
@@ -57,7 +60,7 @@ object TodoService extends TodoService {
 
   override def read[F[_] : Monad](using reader: Reader[F])(id: String): EitherT[F, TodoServiceError, Todo] = 
     for {
-      uuid <- EitherT.fromEither(Try(UUID.fromString(id)).toEither).leftMap(UUIDParseError.apply)
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
       todo <- reader.read(uuid).leftMap(liftToTodoRepositoryError)
     } yield todo
   end read
@@ -73,7 +76,7 @@ object TodoService extends TodoService {
     rawTitle: String,
     rawDescription: String
   ): EitherT[F, TodoServiceError, UUID] = for {
-      uuid <- EitherT.fromEither(Try(UUID.fromString(id)).toEither).leftMap(UUIDParseError.apply)
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
       title <- EitherT.fromEither[F](TodoUtil.refineTitle(rawTitle).left.map(error => liftToTodoRepositoryError(UpdateError.ParseException(error))))
       description <- EitherT.fromEither[F](TodoUtil.refineDescription(rawDescription).left.map(error => liftToTodoRepositoryError(UpdateError.ParseException(error))))
       result <- updator.update(uuid, title, description).leftMap(liftToTodoRepositoryError)
@@ -82,7 +85,7 @@ object TodoService extends TodoService {
 
   override def delete[F[_]: Monad](using deletor: Deletor[F])(id: String): EitherT[F, TodoServiceError, UUID] = 
     for {
-      uuid <- EitherT.fromEither(Try(UUID.fromString(id)).toEither).leftMap(UUIDParseError.apply)
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
       result <- deletor.delete(uuid).leftMap(liftToTodoRepositoryError)
     } yield result
   end delete
