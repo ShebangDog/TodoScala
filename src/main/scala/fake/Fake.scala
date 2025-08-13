@@ -85,7 +85,6 @@ def createFakeInmemoryRepository = new Repository[CurriedState[MockState]] {
     maybeTodo match {
       case None => EitherT.leftT(DeleteError.NotFoundTodoError)
       case Some(todo) =>
-        // Stackから該当のTodoを削除
         inMemory.filterInPlace(_.id != id)
         EitherT.right(State(initial => (initial, todo.id)))
     }
