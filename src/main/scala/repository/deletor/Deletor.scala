@@ -6,6 +6,6 @@ import cats.effect.IO
 import dog.shebang.domain.todo.Todo
 import java.util.UUID
 
-trait Deletor[F[_]] {
+trait Deletor[F[_]]:
   def delete(id: UUID): EitherT[F, DeleteError, UUID]
-}
+end Deletor
