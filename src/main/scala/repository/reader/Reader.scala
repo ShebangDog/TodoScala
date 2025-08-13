@@ -9,4 +9,5 @@ import repository.reader.ReadError
 
 trait Reader[F[_]]:
   def read(id: UUID): EitherT[F, ReadError, Todo]
+  def readAll(): EitherT[F, ReadError, List[Todo]]
 end Reader

@@ -5,7 +5,7 @@ import domain.todo.{Todo, TodoRefinement}
 import repository.*
 import repository.creator.*
 import usecase.todoservice.generate.todo.{ParseDescriptionError, GenerateError, ParseTitleError, generateTodo}
-import usecase.todoservice.{TodoRepositoryError, TodoService, TodoServiceError}
+import usecase.todoservice.{TodoRepositoryError, TodoService, TodoServiceError, UUIDParseError}
 import utility.typeclass.clock.Clock
 import utility.typeconstructor.CurriedState
 
@@ -30,6 +30,10 @@ import hedgehog.core.GenT
 import dog.shebang.fake.createFakeInmemoryRepository
 import generator.todo.TodoGenerator
 import generator.uuid.UUIDGenerator
+import dog.shebang.repository.updator.{Updator, UpdateError}
+import dog.shebang.repository.deletor.{Deletor, DeleteError}
+import dog.shebang.domain.todo.TodoUtil
+import scala.util.Try
 
 object TodoService extends TodoService {
   private def liftToTodoRepositoryError(createError: CreateError): TodoServiceError =
@@ -38,6 +42,15 @@ object TodoService extends TodoService {
   private def liftToTodoRepositoryError(readError: ReadError): TodoServiceError =
     ReadException.apply.andThen(TodoRepositoryError.apply)(readError)
 
+  private def liftToTodoRepositoryError(updateError: UpdateError): TodoServiceError =
+    UpdateException.apply.andThen(TodoRepositoryError.apply)(updateError)
+
+  private def liftToTodoRepositoryError(deleteError: DeleteError): TodoServiceError = {
+    DeleteException.apply.andThen(TodoRepositoryError.apply)(deleteError)
+  }
+
+  private def parseUUID(id: String): Either[Throwable, UUID] = Try(UUID.fromString(id)).toEither
+
   override def save[F[_] : Monad](using generator: UUIDGen[F], creator: Creator[F], clock: Clock[F])(rawTitle: String, rawDescription: String): EitherT[F, TodoServiceError, UUID] = {
     val parseEither = generateTodo[F](rawTitle, rawDescription)
     val liftedExceptionEither = parseEither.leftMap(ParseException.apply.andThen(liftToTodoRepositoryError))
@@ -45,11 +58,37 @@ object TodoService extends TodoService {
     liftedExceptionEither.flatMap(creator.create.andThen(_.leftMap(liftToTodoRepositoryError)))
   }
 
-  override def read[F[_] : Monad](using reader: Reader[F])(id: UUID): EitherT[F, TodoServiceError, Todo] = 
-    val todoEither = reader.read(id)
-
-    todoEither.leftMap(liftToTodoRepositoryError)
+  override def read[F[_] : Monad](using reader: Reader[F])(id: String): EitherT[F, TodoServiceError, Todo] = 
+    for {
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
+      todo <- reader.read(uuid).leftMap(liftToTodoRepositoryError)
+    } yield todo
   end read
+
+  override def readAll[F[_] : Monad](using reader: Reader[F])(): EitherT[F, TodoServiceError, List[Todo]] = 
+    val todosEither = reader.readAll()
+
+    todosEither.leftMap(liftToTodoRepositoryError)
+  end readAll
+
+  override def update[F[_]: Monad](using updator: Updator[F])(
+    id: String,
+    rawTitle: String,
+    rawDescription: String
+  ): EitherT[F, TodoServiceError, UUID] = for {
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
+      title <- EitherT.fromEither[F](TodoUtil.refineTitle(rawTitle).left.map(error => liftToTodoRepositoryError(UpdateError.ParseException(error))))
+      description <- EitherT.fromEither[F](TodoUtil.refineDescription(rawDescription).left.map(error => liftToTodoRepositoryError(UpdateError.ParseException(error))))
+      result <- updator.update(uuid, title, description).leftMap(liftToTodoRepositoryError)
+    } yield result
+  end update
+
+  override def delete[F[_]: Monad](using deletor: Deletor[F])(id: String): EitherT[F, TodoServiceError, UUID] = 
+    for {
+      uuid <- EitherT.fromEither(parseUUID(id)).leftMap(UUIDParseError.apply)
+      result <- deletor.delete(uuid).leftMap(liftToTodoRepositoryError)
+    } yield result
+  end delete
 }
 
 class TodoServiceTest extends AnyFunSpec {
@@ -147,7 +186,6 @@ class TodoServiceTest extends AnyFunSpec {
               assert(expected == result)
             }
           }
-
         }
       }
     }
@@ -186,7 +224,7 @@ object TodoServiceProperty extends Properties:
         generatedId <- UUIDGenerator.generateUUID.forAll
       } yield for {
         id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
-        todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
+        todo <- TodoService.read(id.toString()).value.run(MockState(generatedId, timeLong)).value._2
       } yield (todo.title, generatedTitle)
 
       result.map {
@@ -205,12 +243,12 @@ object TodoServiceProperty extends Properties:
         generatedId <- UUIDGenerator.generateUUID.forAll
       } yield {
         val todoBeforeSave = for {
-          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(generatedId).value.run(MockState(generatedId, timeLong)).value._2
         } yield todo
 
         val todoAfterSave = for {
           _ <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
-          todo <- TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(generatedId).value.run(MockState(generatedId, timeLong)).value._2
         } yield todo
 
         HHResult.diff(todoBeforeSave, todoAfterSave)(_ != _)
@@ -228,7 +266,7 @@ object TodoServiceProperty extends Properties:
       } yield {
         val result = for {
           id <- TodoService.save(generatedTitle, generatedDescription).value.run(MockState(generatedId, timeLong)).value._2
-          todo <- TodoService.read(id).value.run(MockState(generatedId, timeLong)).value._2
+          todo <- TodoService.read(id.toString()).value.run(MockState(generatedId, timeLong)).value._2
         } yield (id, todo)
 
         result match
@@ -251,8 +289,8 @@ object TodoServiceProperty extends Properties:
         timeLong <- TodoGenerator.generateTime.forAll
         generatedId <- UUIDGenerator.generateUUID.forAll
       } yield {
-        val firstTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
-        val secondTime = TodoService.read(UUID.fromString(generatedId)).value.run(MockState(generatedId, timeLong)).value._2
+        val firstTime = TodoService.read(generatedId).value.run(MockState(generatedId, timeLong)).value._2
+        val secondTime = TodoService.read(generatedId).value.run(MockState(generatedId, timeLong)).value._2
         
         firstTime ==== secondTime
       }
