@@ -2,7 +2,7 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.3.6"
 
-(Test / scalaSource) := (Compile / scalaSource).value
+// (Test / scalaSource) := (Compile / scalaSource).value
 
 reStart / mainClass := Some("dog.shebang.Main")
 
@@ -13,6 +13,7 @@ lazy val root = (project in file("."))
   )
 
 val hedgehogVersion = "0.10.1"
+val doobieVersion = "1.0.0-RC8"
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-effect" % "3.5.0",
@@ -21,5 +22,10 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest-funspec" % "3.2.15",
   "qa.hedgehog" %% "hedgehog-core" % hedgehogVersion,
   "qa.hedgehog" %% "hedgehog-runner" % hedgehogVersion,
-  "qa.hedgehog" %% "hedgehog-sbt" % hedgehogVersion
+  "qa.hedgehog" %% "hedgehog-sbt" % hedgehogVersion,
+  "org.tpolecat" %% "doobie-core" % doobieVersion,
+  "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+  "org.tpolecat" %% "doobie-scalatest" % doobieVersion,
+  "io.circe" %% "circe-core" % "0.14.3",
+  "com.zaxxer" % "HikariCP" % "5.0.1"
 )
