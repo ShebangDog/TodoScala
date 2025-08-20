@@ -1,0 +1,26 @@
+{
+  "name": "TodoScala Dev Container",
+  "dockerComposeFile": [ "../docker-compose.yml" ],
+  "service": "api-server",
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "scalameta.metals",
+        "scala-lang.scala",
+        "schneiderpat.git-pr-release"
+      ],
+      "settings": {
+        "metals.javaHome": "/usr/local/openjdk-17",
+        "java.jdt.ls.java.home": "/usr/local/openjdk-17",
+        "files.watcherExclude": {
+          "**/target": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "sbt bloopInstall",
+  "forwardPorts": [9000],
+  "remoteUser": "root"
+}

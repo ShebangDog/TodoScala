@@ -1,0 +1,12 @@
+services:
+  db:
+    image: imresamu/postgis-arm64:17-3.4-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_PASSWORD: test
+  api-server:
+    image: sbtscala/scala-sbt:graalvm-ce-22.3.3-b1-java17_1.11.4_3.3.6
+    container_name: api_server
+    working_dir: /app
+    volumes:
+      - .:/app
